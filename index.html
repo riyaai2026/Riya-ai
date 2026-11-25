@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="hi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#111126">
+  <meta name="description" content="Riya AI - your personal voice assistant">
+  <title>Riya AI</title>
+  <link rel="manifest" href="./manifest.json">
+  <link rel="icon" href="./icon-192.png">
+  <style>
+    :root{color-scheme:dark;--bg:#0d0d1c;--panel:#17172b;--accent:#9b7bff;--muted:#a7a6bc}
+    *{box-sizing:border-box} body{margin:0;background:radial-gradient(circle at top,#29204b 0,#0d0d1c 45%);font-family:system-ui,-apple-system,Arial,sans-serif;color:#fff;min-height:100vh}
+    .app{max-width:720px;margin:auto;min-height:100vh;display:flex;flex-direction:column;padding:18px 14px calc(18px + env(safe-area-inset-bottom))}
+    header{display:flex;align-items:center;gap:12px;padding:8px 4px 18px}.logo{width:48px;height:48px;border-radius:16px;background:linear-gradient(135deg,#a78bfa,#4f46e5);display:grid;place-items:center;font-size:25px;box-shadow:0 8px 30px #7c3aed55}
+    h1{font-size:21px;margin:0} .sub{font-size:12px;color:var(--muted);margin-top:3px}
+    #install{margin-left:auto;background:#292443;color:white;border:1px solid #51427d;border-radius:12px;padding:9px 11px}
+    .hero{text-align:center;padding:20px 0 14px}.orb{width:118px;height:118px;border-radius:50%;margin:auto;background:radial-gradient(circle at 35% 30%,#e9ddff,#9b7bff 28%,#5141bd 65%,#17172b);box-shadow:0 0 50px #8b5cf677;display:grid;place-items:center;font-size:42px}
+    .status{color:#c9c2e9;font-size:13px;margin-top:14px}
+    #messages{flex:1;overflow:auto;display:flex;flex-direction:column;gap:10px;padding:12px 2px;min-height:180px}
+    .bubble{max-width:88%;padding:12px 14px;border-radius:17px;line-height:1.45;white-space:pre-wrap;overflow-wrap:anywhere}
+    .bot{align-self:flex-start;background:#201e36;border:1px solid #393354}.user{align-self:flex-end;background:#5d49b5}
+    .controls{background:#17172b;border:1px solid #34304d;border-radius:22px;padding:12px;display:flex;gap:8px;align-items:center}
+    input{min-width:0;flex:1;background:#0f1020;border:1px solid #3b3855;border-radius:14px;padding:14px;color:white;font-size:15px;outline:none}
+    button{cursor:pointer;border:0;font-weight:600}.send{background:#8b72ef;color:#fff;border-radius:14px;padding:13px 15px}.mic{width:54px;height:54px;border-radius:50%;background:linear-gradient(135deg,#a78bfa,#6652d9);color:white;font-size:22px}
+    .mic.listening{background:#d94665;box-shadow:0 0 0 6px #d9466533}.tools{display:flex;justify-content:space-between;align-items:center;padding:10px 4px;color:var(--muted);font-size:12px}
+    .tools button{background:transparent;color:#c8baff;padding:8px}.hint{font-size:11px;color:#9693ad;text-align:center;margin-top:9px}
+    button:disabled{opacity:.5}
+  </style>
+</head>
+<body>
+<div class="app">
+  <header><div class="logo">✦</div><div><h1>RIYA AI</h1><div class="sub">Your personal voice assistant</div></div><button id="install" hidden>Install</button></header>
+  <section class="hero"><div class="orb">✧</div><div class="status" id="status">Namaste! Main Riya hoon. Mujhse baat karo.</div></section>
+  <main id="messages" aria-live="polite">
+    <div class="bubble bot">Namaste! 😊 Main Riya hoon. Neeche message likho ya microphone dabakar bolo.</div>
+  </main>
+  <div class="controls">
+    <button class="mic" id="mic" title="Speak" aria-label="Speak">🎙</button>
+    <input id="message" placeholder="Riya se kuch poochho..." autocomplete="off">
+    <button class="send" id="send">Send</button>
+  </div>
+  <div class="tools"><span id="voiceState">Voice: Hindi (India)</span><button id="clear">Clear chat</button></div>
+  <div class="hint">Voice recognition ke liye browser permission aur internet ki zaroorat ho sakti hai.</div>
+</div>
+<script>
+const API_URL = "PASTE_YOUR_CLOUDFLARE_WORKER_URL_HERE";
+const messagesEl = document.getElementById("messages");
+const inputEl = document.getElementById("message");
+const statusEl = document.getElementById("status");
+const micBtn = document.getElementById("mic");
+let history = [];
+try { history = JSON.parse(localStorage.getItem("riya-history") || "[]"); } catch {}
+function addBubble(text, who) {
+  const el = document.createElement("div");
+  el.className = "bubble " + who;
+  el.textContent = text;
+  messagesEl.appendChild(el);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+function saveHistory(){ localStorage.setItem("riya-history", JSON.stringify(history.slice(-30))); }
+function speak(text){
+  if (!("speechSynthesis" in window)) return;
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = /[\u0900-\u097F]/.test(text) ? "hi-IN" : "en-IN";
+  u.rate = 1; speechSynthesis.speak(u);
+}
+async function sendMessage(text){
+  text = (text || "").trim(); if(!text) return;
+  addBubble(text,"user"); inputEl.value = "";
+  history.push({role:"user", content:text}); saveHistory();
+  if (API_URL.includes("PASTE_YOUR")) {
+    const msg = "Abhi AI server connect nahi hua hai. Pehle worker.js deploy karke API_URL mein uska URL paste karo.";
+    addBubble(msg,"bot"); statusEl.textContent = "Setup baaki hai"; return;
+  }
+  statusEl.textContent = "Riya soch rahi hai...";
+  document.getElementById("send").disabled = true;
+  try {
+    const res = await fetch(API_URL, {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({messages:history.slice(-12)})});
+    const data = await res.json();
+    if(!res.ok) throw new Error(data.error || "Server error");
+    const reply = data.reply || "Mujhe jawab nahi mila.";
+    history.push({role:"assistant",content:reply}); saveHistory();
+    addBubble(reply,"bot"); speak(reply); statusEl.textContent = "Riya online hai";
+  } catch(e) {
+    addBubble("Maaf karna, connection mein dikkat hai: " + e.message,"bot");
+    statusEl.textContent = "Connection error";
+  } finally { document.getElementById("send").disabled = false; }
+}
+document.getElementById("send").addEventListener("click",()=>sendMessage(inputEl.value));
+inputEl.addEventListener("keydown",e=>{if(e.key==="Enter") sendMessage(inputEl.value)});
+document.getElementById("clear").addEventListener("click",()=>{history=[];saveHistory();messagesEl.innerHTML="";addBubble("Chat clear ho gayi. Ab kya baat karein?","bot");});
+history.forEach(m=>addBubble(m.content,m.role==="user"?"user":"bot"));
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+if(SpeechRecognition){
+  const recognition = new SpeechRecognition(); recognition.lang="hi-IN"; recognition.interimResults=false; recognition.maxAlternatives=1;
+  micBtn.addEventListener("click",()=>{
+    try{recognition.start();}catch(e){}
+  });
+  recognition.onstart=()=>{micBtn.classList.add("listening");statusEl.textContent="Sun rahi hoon...";};
+  recognition.onend=()=>{micBtn.classList.remove("listening");if(statusEl.textContent==="Sun rahi hoon...")statusEl.textContent="Bolo, main sun rahi hoon.";};
+  recognition.onerror=e=>{statusEl.textContent="Mic error: "+e.error;};
+  recognition.onresult=e=>{const said=e.results[0][0].transcript;inputEl.value=said;sendMessage(said);};
+}else{
+  micBtn.disabled=true;micBtn.title="Is browser mein speech recognition supported nahi hai";
+  statusEl.textContent="Voice typing ke liye Chrome ka microphone support chahiye.";
+}
+let installPrompt;
+window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();installPrompt=e;document.getElementById("install").hidden=false;});
+document.getElementById("install").addEventListener("click",async()=>{if(!installPrompt)return;installPrompt.prompt();await installPrompt.userChoice;installPrompt=null;document.getElementById("install").hidden=true;});
+if("serviceWorker" in navigator) window.addEventListener("load",()=>navigator.serviceWorker.register("./sw.js").catch(()=>{}));
+</script>
+</body>
+</html>
